@@ -7,6 +7,13 @@ const express               =  require('express'),
       LocalStrategy         =  require("passport-local"),
       passportLocalMongoose =  require("passport-local-mongoose"),
       User                  =  require("./models/user")
+      mongoSanitize         =  require('express-mongo-sanitize'),
+      rateLimit             =  require('express-rate-limit'),
+      xss                   =  require('xss-clean'),
+      helmet                   =  require('helmet');
+
+
+
 
 //Connecting database
 mongoose.connect("mongodb://localhost/auth_demo");
@@ -14,7 +21,12 @@ mongoose.connect("mongodb://localhost/auth_demo");
 app.use(expSession({
     secret:"mysecret",       //decode or encode session
     resave: false,          
-    saveUninitialized:false
+    saveUninitialized: true,
+    cookie: {
+        httpOnly: true,
+        secure: true,
+        maxAge: 10 * 60 * 1000 // 10 minutes
+    }
 }))
 
 passport.serializeUser(User.serializeUser());       //session encoding
@@ -33,7 +45,26 @@ app.use(express.static("public"));
 //      O W A S P
 //=======================
 
+app.use(mongoSanitize());
 
+// Preventing Brute Force & DOS Attacks – Rate Limiting
+const limit = rateLimit({
+    max: 100, // max requests
+    windowMs: 60 * 60 * 1000, // 1 Hour of 'ban' / lockout
+    message: 'Too many requests' // message to send
+  });
+  
+  app.use('/routeName', limit); // Setting limiter on specific route
+  
+
+// Preventing DOS Attacks – Body Parser
+app.use(express.json({ limit: '10kb' })); // Body limit is 10kb
+
+// Data Sanitization against XSS attacks
+app.use(xss());
+
+//Helmet to secure connection and data
+app.use(helmet());
 
 //=======================
 //      R O U T E S
